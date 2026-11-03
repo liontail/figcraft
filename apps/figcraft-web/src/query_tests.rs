@@ -1,6 +1,6 @@
 //! `#join=` and `?control` in the page's URL, and the server the page names for itself.
 
-use crate::query::{control, join_link, page_server};
+use crate::query::{control, infer_server, join_link, page_server, query_server};
 
 #[test]
 fn join_takes_the_rest_of_the_fragment() {
@@ -48,4 +48,21 @@ fn a_page_names_its_own_server_without_a_key() {
     {
         assert_eq!(page_server(bad), None, "{bad:?} is ignored");
     }
+}
+
+#[test]
+fn query_server_reads_server_flag() {
+    assert_eq!(query_server("?server=ws://127.0.0.1:47900/").as_deref(), Some("ws://127.0.0.1:47900/"));
+    assert_eq!(query_server("server=wss://figcraft.example/").as_deref(), Some("wss://figcraft.example/"));
+    assert_eq!(query_server("?webgl&server=ws://127.0.0.1:47900/&control").as_deref(), Some("ws://127.0.0.1:47900/"));
+    assert_eq!(query_server("?server=invalid"), None);
+    assert_eq!(query_server("?noserver=ws://127.0.0.1:47900/"), None);
+}
+
+#[test]
+fn test_infer_server() {
+    assert_eq!(infer_server("https:", "figcraft.zaief.com", "figcraft.zaief.com"), "wss://figcraft.zaief.com/");
+    assert_eq!(infer_server("http:", "localhost", "localhost:8767"), "ws://127.0.0.1:47900/");
+    assert_eq!(infer_server("http:", "127.0.0.1", "127.0.0.1:8767"), "ws://127.0.0.1:47900/");
+    assert_eq!(infer_server("http:", "192.168.1.100", "192.168.1.100:8767"), "ws://192.168.1.100:47900/");
 }

@@ -72,6 +72,10 @@ pub trait Services {
     fn system_language(&self) -> Option<String> {
         None
     }
+    /// Where this app is served on the web, if running in a browser or configured with one (e.g. `http://localhost:8767/`).
+    fn web_base_url(&self) -> Option<String> {
+        None
+    }
     /// The controller buttons held now on any controller: bit i is standard gamepad layout index i
     /// (0 the bottom face button … 16 home; `figcraft_doc::proto::GAMEPAD_BUTTONS`). The prototype
     /// player asks every frame while its prototype has gamepad triggers.

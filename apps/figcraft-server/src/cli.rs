@@ -448,3 +448,45 @@ fn size(bytes: u64) -> String {
 
 /// `YYYY-MM-DD HH:MM UTC` for seconds since 1970.
 pub use figcraft_collab::message::utc_date as date;
+
+/// Apply environment variables to config:
+/// `PUBLIC_HOST` (e.g. `figcraft.zaief.com`), `PUBLIC_URL`, `WEB_URL`, `LISTEN`, `DATA_DIR`.
+pub fn apply_env(config: &mut Config) {
+    if let Ok(host) = std::env::var("PUBLIC_HOST").or_else(|_| std::env::var("FIGCRAFT_PUBLIC_HOST")) {
+        let host = host.trim();
+        if !host.is_empty() {
+            if config.public_url.is_none() {
+                let scheme = if host.starts_with("localhost") || host.starts_with("127.0.0.1") { "ws" } else { "wss" };
+                config.public_url = Some(format!("{scheme}://{host}/"));
+            }
+            if config.web_url.is_empty() {
+                let scheme = if host.starts_with("localhost") || host.starts_with("127.0.0.1") { "http" } else { "https" };
+                config.web_url = format!("{scheme}://{host}/");
+            }
+        }
+    }
+    if let Ok(val) = std::env::var("PUBLIC_URL").or_else(|_| std::env::var("FIGCRAFT_PUBLIC_URL")) {
+        let val = val.trim();
+        if !val.is_empty() {
+            config.public_url = Some(val.to_string());
+        }
+    }
+    if let Ok(val) = std::env::var("WEB_URL").or_else(|_| std::env::var("FIGCRAFT_WEB_URL")) {
+        let val = val.trim();
+        if !val.is_empty() {
+            config.web_url = val.to_string();
+        }
+    }
+    if let Ok(val) = std::env::var("LISTEN").or_else(|_| std::env::var("FIGCRAFT_LISTEN")) {
+        let val = val.trim();
+        if !val.is_empty() {
+            config.listen = val.to_string();
+        }
+    }
+    if let Ok(val) = std::env::var("DATA_DIR").or_else(|_| std::env::var("FIGCRAFT_DATA_DIR")) {
+        let val = val.trim();
+        if !val.is_empty() {
+            config.data = PathBuf::from(val);
+        }
+    }
+}

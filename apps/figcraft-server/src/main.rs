@@ -6,13 +6,14 @@ use figcraft_server::cli::{self, Command};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let cli = match cli::parse(&args) {
+    let mut cli = match cli::parse(&args) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("figcraft-server: {e}\n(figcraft-server --help lists what it takes)");
             return ExitCode::from(2);
         }
     };
+    cli::apply_env(&mut cli.config);
     if cli.command != Command::Serve {
         return match cli::run(&cli) {
             Ok(out) => {

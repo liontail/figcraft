@@ -43,6 +43,7 @@ pub struct GuestConfig {
     pub attempts: u32,
     /// Join as the client you were (an app that starts over after a crash): the first hello
     /// carries it, and a server that still knows the id gives it back.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub resume: Option<Resume>,
 }
 

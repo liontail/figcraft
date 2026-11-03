@@ -735,7 +735,7 @@ pub fn join_field(app: &mut FigApp, ui: &mut Ui, typed: &mut String, id: egui::I
 
 /// Join with `typed` (a code or an invite link); the Join dialog follows the join. Its session, if
 /// it started.
-fn start_join(app: &mut FigApp, typed: &str) -> Option<SessionId> {
+pub fn start_join(app: &mut FigApp, typed: &str) -> Option<SessionId> {
     let session = app.run("collab.join", json!({"code": typed})).and_then(|j| j["session"].as_u64())?;
     app.ui.live.joining = Some((session, typed.to_string()));
     Some(session)
@@ -1036,7 +1036,8 @@ fn share_ui(app: &mut FigApp, ui: &mut Ui, t: &Tokens, share: &Share) {
     if live.status != Status::Live {
         return stop(app, ui);
     }
-    let link = share.link().unwrap_or_default().to_string();
+    let raw_link = share.link().unwrap_or_default().to_string();
+    let link = web_invite_link(app, &raw_link);
     let me = live.info.as_ref().map(|i| i.name.clone()).unwrap_or_default();
     let names: Vec<String> = std::iter::once(trf("{name} (you)", &[("name", &me)])).chain(live.peers.values().map(|p| p.name.clone())).collect();
     let hosting = live.hosting.clone();
@@ -1097,7 +1098,8 @@ fn access_choice(app: &mut FigApp, ui: &mut Ui, share: &Share) {
 /// Hosting: the invite link and URL to copy, and stop.
 fn host_ui(app: &mut FigApp, ui: &mut Ui) {
     let Some(info) = app.session.live().info.clone() else { return };
-    link_rows(app, ui, &[(tr("Invite link"), &info.link, tr("Invite link copied")), (tr("WebSocket URL"), &info.url, tr("WebSocket URL copied"))]);
+    let link = web_invite_link(app, &info.link);
+    link_rows(app, ui, &[(tr("Invite link"), &link, tr("Invite link copied")), (tr("WebSocket URL"), &info.url, tr("WebSocket URL copied"))]);
     let t = Tokens::get(ui.ctx());
     widgets::label(ui, tr("The link carries the session's secret: share it only with people you invite."), t.text_secondary);
     widgets::label(ui, tr(UNDO_NOTE), t.text_secondary);
@@ -1124,7 +1126,9 @@ fn guest_ui(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
     }
     let hosting = live.hosting.clone();
     if let Some(p) = live.published.clone() {
-        link_rows(app, ui, &[(tr("Edit link"), &p.edit, tr("Edit link copied")), (tr("View link"), &p.view, tr("View link copied"))]);
+        let edit = web_invite_link(app, &p.edit);
+        let view = web_invite_link(app, &p.view);
+        link_rows(app, ui, &[(tr("Edit link"), &edit, tr("Edit link copied")), (tr("View link"), &view, tr("View link copied"))]);
         widgets::label(ui, tr(PUBLISHED_NOTE), t.text_secondary);
     }
     if let Some(h) = &hosting {
@@ -1204,6 +1208,35 @@ fn report_ui(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
     });
     if keep {
         app.ui.live.report = Some(reason);
+    }
+}
+
+/// If a web base URL is known (from `services.web_base_url()` in a browser or `session.team()`),
+/// turn an internal `figcraft://join?...` link into a browser-openable link: `<web_url>#join=<escaped>`.
+pub fn web_invite_link(app: &FigApp, link: &str) -> String {
+    if !link.starts_with("figcraft://join?") {
+        return link.to_string();
+    }
+    let web_base = app.services.web_base_url().or_else(|| {
+        app.session.team().and_then(|t| match &t.list {
+            figcraft_engine::team::TeamList::Files { web, .. } if !web.trim().is_empty() => Some(web.clone()),
+            _ => None,
+        })
+    });
+    match web_base {
+        Some(base) if !base.trim().is_empty() => {
+            let base = base.trim().trim_end_matches('#');
+            let sep = if base.ends_with('/') { "" } else { "/" };
+            let escaped: String = link
+                .bytes()
+                .map(|b| match b {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => char::from(b).to_string(),
+                    _ => format!("%{b:02X}"),
+                })
+                .collect();
+            format!("{base}{sep}#join={escaped}")
+        }
+        _ => link.to_string(),
     }
 }
 
@@ -1438,7 +1471,9 @@ fn published_dialog(app: &mut FigApp, ctx: &egui::Context) {
         widgets::label(ui, &trf("{name} is on the server.", &[("name", &p.name)]), t.text);
         link_rows(app, ui, &[(tr("Owner token"), &owner, tr("Owner token copied"))]);
         widgets::label(ui, tr(note), t.danger);
-        link_rows(app, ui, &[(tr("Edit link"), &p.edit, tr("Edit link copied")), (tr("View link"), &p.view, tr("View link copied"))]);
+        let edit = web_invite_link(app, &p.edit);
+        let view = web_invite_link(app, &p.view);
+        link_rows(app, ui, &[(tr("Edit link"), &edit, tr("Edit link copied")), (tr("View link"), &view, tr("View link copied"))]);
         expiry_line(ui, &t, p.expires);
         if let Some(h) = &hosting {
             host_line(ui, &t, &h.operator, &h.terms);

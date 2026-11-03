@@ -31,3 +31,39 @@ pub fn page_server(content: &str) -> Option<String> {
 pub fn control(search: &str) -> bool {
     search.strip_prefix('?').unwrap_or(search).split('&').any(|entry| entry.split('=').next() == Some("control"))
 }
+
+/// The server address in the query string (`?server=ws://…` or `?server=wss://…`), if any.
+pub fn query_server(search: &str) -> Option<String> {
+    let search = search.strip_prefix('?').unwrap_or(search);
+    search.split('&').find_map(|entry| entry.strip_prefix("server=")).and_then(page_server)
+}
+
+/// Infer the WebSocket collaboration endpoint from protocol and host string:
+/// e.g. "https:" and "figcraft.zaief.com" -> "wss://figcraft.zaief.com/"
+/// e.g. "http:" and "localhost:8767" -> "ws://127.0.0.1:47900/"
+pub fn infer_server(protocol: &str, hostname: &str, host: &str) -> String {
+    if protocol == "https:" {
+        format!("wss://{host}/")
+    } else if hostname == "localhost" || hostname == "127.0.0.1" {
+        "ws://127.0.0.1:47900/".to_string()
+    } else {
+        format!("ws://{hostname}:47900/")
+    }
+}
+
+/// The default server automatically inferred from the current page's browser location.
+#[cfg(target_arch = "wasm32")]
+pub fn auto_server() -> Option<String> {
+    let window = web_sys::window()?;
+    let loc = window.location();
+    let hostname = loc.hostname().ok()?;
+    let host = loc.host().ok()?;
+    let protocol = loc.protocol().ok().unwrap_or_else(|| "http:".to_string());
+    Some(infer_server(&protocol, &hostname, &host))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
+pub fn auto_server() -> Option<String> {
+    None
+}

@@ -51,7 +51,17 @@ pub fn start() {
                     let reduce_motion = web_sys::window().and_then(|w| w.match_media("(prefers-reduced-motion: reduce)").ok().flatten());
                     let mut session = Session::new();
                     // The host names its own server: the default for sharing, codes and the team list.
-                    if let Some(server) = page_meta("figcraft-server").as_deref().and_then(crate::query::page_server) {
+                    let page_server = page_meta("figcraft-server").as_deref().and_then(crate::query::page_server).filter(|s| {
+                        if s.contains("127.0.0.1") || s.contains("localhost") {
+                            if let Some(w) = web_sys::window() {
+                                if let Ok(h) = w.location().hostname() {
+                                    return h == "localhost" || h == "127.0.0.1";
+                                }
+                            }
+                        }
+                        true
+                    });
+                    if let Some(server) = page_server.or_else(|| crate::query::query_server(&query())).or_else(crate::query::auto_server) {
                         session.prefs.publish_server = server;
                     }
                     crate::kept::restore_name(&mut session, local_storage().and_then(|s| s.get_item(NAME_KEY).ok().flatten()));
@@ -65,11 +75,11 @@ pub fn start() {
                     if let Err(e) = crate::pasted::install(cc.egui_ctx.clone()) {
                         log::error!("couldn't listen for pasted images: {e:?}");
                     }
-                    // `#join=<link>`: join that session, as opening an invite link does on the desktop.
+                    // `#join=<link>`: join that session directly.
                     let hash = web_sys::window().and_then(|w| w.location().hash().ok()).unwrap_or_default();
                     if let Some(link) = crate::query::join_link(&hash) {
                         let link = js_sys::decode_uri_component(link).ok().and_then(|s| s.as_string()).unwrap_or_else(|| link.to_string());
-                        figcraft_ui_egui::live::open_invite(&mut fig, &link);
+                        figcraft_ui_egui::live::start_join(&mut fig, &link);
                     }
                     // `?control`: `window.figcraft`, the page's control channel (crate::api), opt-in.
                     if crate::query::control(&query()) {
@@ -252,6 +262,14 @@ impl Services for WebServices {
     /// The browser's language (`navigator.language`).
     fn system_language(&self) -> Option<String> {
         web_sys::window().and_then(|w| w.navigator().language())
+    }
+    fn web_base_url(&self) -> Option<String> {
+        web_sys::window().and_then(|w| {
+            let loc = w.location();
+            let origin = loc.origin().ok()?;
+            let pathname = loc.pathname().ok().unwrap_or_else(|| "/".to_string());
+            Some(format!("{origin}{pathname}"))
+        })
     }
     /// The Gamepad API's controllers with the standard mapping (its button order is the layout's;
     /// others are skipped). Browsers list controllers once one of their buttons is pressed.

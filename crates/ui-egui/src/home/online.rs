@@ -217,7 +217,8 @@ fn row(app: &mut FigApp, ui: &mut Ui, t: &Tokens, f: &OnlineFile, busy: bool) {
         if let Some(s) = shared
             && item(ui, tr("Copy link"), true)
         {
-            app.clipboard_set_text(&s.edit.link);
+            let link = crate::live::web_invite_link(app, &s.edit.link);
+            app.clipboard_set_text(&link);
             app.toast(tr("Invite link copied"));
             ui.close();
         }

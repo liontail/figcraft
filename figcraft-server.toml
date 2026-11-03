@@ -1,0 +1,6 @@
+# FigCraft Local Collaboration Server Configuration (POC)
+listen = "0.0.0.0:47900"
+data = "./figcraft-data"
+open_publish = true
+team_files = "edit"
+web_url = "http://localhost:8767/"
